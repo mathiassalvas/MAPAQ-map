@@ -19,7 +19,7 @@ jobs:
         uses: actions/configure-pages@v4
 
       - name: Upload artifact for GitHub Pages (publish `MAPAQ-map` folder)
-        uses: actions/upload-pages-artifact@v2
+        uses: actions/upload-pages-artifact@v3
         with:
           # publish only the MAPAQ-map folder contents
           path: 'MAPAQ-map'
