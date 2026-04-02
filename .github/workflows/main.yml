@@ -5,12 +5,18 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write   # 🔥 CRITIQUE
+
 jobs:
   deploy:
     concurrency:
       group: gh-pages
       cancel-in-progress: true
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,11 +24,10 @@ jobs:
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v4
 
-      - name: Upload artifact for GitHub Pages (publish `MAPAQ-map` folder)
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # publish only the MAPAQ-map folder contents
           path: '.'
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy
         uses: actions/deploy-pages@v1
