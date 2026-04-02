@@ -135,8 +135,23 @@ const markers = L.markerClusterGroup({
 map.addLayer(markers);
 
 let allData = [];
+let minAmende = 0;
+let maxAmende = 1;
 
-/* ✅ STATUT CORRIGÉ */
+/* 🔹 Parser amende */
+function parseAmende(value){
+  if(!value) return 0;
+  return parseFloat(value.replace(/\s|\$/g, "")) || 0;
+}
+
+/* 🔹 Gradient pro */
+function getColor(amende){
+  const ratio = (amende - minAmende) / (maxAmende - minAmende || 1);
+  const lightness = 90 - ratio * 70;
+  return `hsl(0, 100%, ${lightness}%)`;
+}
+
+/* STATUT */
 function isClosed(row){
   const info = (row.Information_etablissement || "").toLowerCase();
   return info.includes("cessé ses opérations");
@@ -184,14 +199,33 @@ function displayData(data){
 
     if(!isNaN(lat) && !isNaN(lon)){
 
+      const amende = parseAmende(row.Amende);
+      const color = getColor(amende);
+
+      const icon = L.divIcon({
+        className: "",
+        html: `
+          <svg width="24" height="36" viewBox="0 0 24 36">
+            <path d="M12 0C5 0 0 5 0 12c0 10 12 24 12 24s12-14 12-24C24 5 19 0 12 0z"
+                  fill="${color}"
+                  stroke="#333"
+                  stroke-width="1"/>
+            <circle cx="12" cy="12" r="5" fill="white"/>
+          </svg>
+        `,
+        iconSize: [24, 36],
+        iconAnchor: [12, 36],
+        popupAnchor: [0, -30]
+      });
+
+      const marker = L.marker([lat, lon], { icon });
+
       const googleQuery = encodeURIComponent(
         row.Raison_sociale + " " + row.Adresse_lieu_infraction
       );
 
       const closed = isClosed(row);
       const status = closed ? "🔴 Fermé" : "🟢 Actif";
-
-      const marker = L.marker([lat,lon]);
 
       marker.bindPopup(`
         <div class="popup-title">${row.Raison_sociale}</div>
@@ -243,6 +277,10 @@ Papa.parse("listecondamnation_geocoded.csv", {
   complete: function(results){
 
     allData = results.data;
+
+    const amendes = allData.map(r => parseAmende(r.Amende));
+    minAmende = Math.min(...amendes);
+    maxAmende = Math.max(...amendes);
 
     const counts = {};
     allData.forEach(r=>{
