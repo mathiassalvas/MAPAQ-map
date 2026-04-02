@@ -22,7 +22,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           # publish only the MAPAQ-map folder contents
-          path: 'MAPAQ-map'
+          path: '.'
 
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v1
