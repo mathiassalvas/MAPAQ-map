@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>Infractions MAPAQ – Québec</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
+
+<style>
+body { margin:0; font-family: Arial; }
+
+/* HEADER */
+.header {
+  position:absolute;
+  top:0;
+  width:100%;
+  background:white;
+  padding:10px;
+  z-index:1000;
+  box-shadow:0 2px 8px rgba(0,0,0,0.15);
+  display:flex;
+  justify-content:center;
+  gap:10px;
+}
+
+.header input, .header select {
+  padding:6px;
+  font-size:14px;
+}
+
+/* MAP */
+#map {
+  height: calc(100vh - 90px);
+  margin-top:50px;
+}
+
+/* POPUP */
+.popup-content {
+  max-height:200px;
+  overflow-y:auto;
+  font-size:13px;
+}
+.popup-title {
+  font-weight:bold;
+  font-size:15px;
+}
+
+/* FOOTER */
+.footer {
+  height:40px;
+  background:#f5f5f5;
+  border-top:1px solid #ddd;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:13px;
+  color:#555;
+}
+.footer a {
+  color:#0077cc;
+  text-decoration:none;
+}
+
+/* COMPASS */
+.nav {
+  position:absolute;
+  bottom:60px;
+  right:20px;
+  z-index:1000;
+}
+.compass {
+  position:relative;
+  width:90px;
+  height:90px;
+}
+.compass button {
+  position:absolute;
+  width:35px;
+  height:35px;
+  border:none;
+  border-radius:50%;
+  background:white;
+  box-shadow:0 2px 6px rgba(0,0,0,0.3);
+  cursor:pointer;
+}
+.up { top:0; left:27px; }
+.down { bottom:0; left:27px; }
+.left { left:0; top:27px; }
+.right { right:0; top:27px; }
+</style>
+</head>
+
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <input id="search" placeholder="Rechercher restaurant..." />
+  <select id="filter">
+    <option value="">Toutes les infractions</option>
+  </select>
+  <button onclick="resetView()">Réinitialiser</button>
+</div>
+
+<!-- COMPASS -->
+<div class="nav">
+  <div class="compass">
+    <button class="up" onclick="map.panBy([0,-150])">↑</button>
+    <button class="left" onclick="map.panBy([-150,0])">←</button>
+    <button class="right" onclick="map.panBy([150,0])">→</button>
+    <button class="down" onclick="map.panBy([0,150])">↓</button>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<!-- FOOTER -->
+<div class="footer">
+  Réalisé par <strong>&nbsp;Mathias Salvas</strong>, 1er avril 2026 —
+  <a href="https://www.donneesquebec.ca/recherche/dataset/condamnations-des-etablissements-alimentaires-et-condamnations-concernant-le-bien-etre-des-anim/resource/40105615-3abf-414b-bcba-182e8f2c5eb2" target="_blank">
+    &nbsp;Infractions MAPAQ
+  </a>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
+<script>
+const map = L.map("map").setView([52, -71], 6);
+
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+
+const markers = L.markerClusterGroup({
+  disableClusteringAtZoom: 14,   // 🔥 clé principale
+  maxClusterRadius: 40,          // moins agressif
+  spiderfyOnMaxZoom: true,
+  showCoverageOnHover: false
+});
+map.addLayer(markers);
+
+let allData = [];
+
+/* RESET */
+function resetView(){
+  document.getElementById("search").value = "";
+  document.getElementById("filter").value = "";
+  displayData(allData);
+  map.setView([52,-71],6);
+}
+
+/* DISPLAY */
+function displayData(data){
+  markers.clearLayers();
+
+  data.forEach(row=>{
+    const lat = parseFloat(row.Latitude);
+    const lon = parseFloat(row.Longitude);
+
+    if(!isNaN(lat) && !isNaN(lon)){
+
+      const googleQuery = encodeURIComponent(
+        (row.Raison_sociale || "") + " " + (row.Adresse_lieu_infraction || "")
+      );
+
+      const marker = L.marker([lat,lon]);
+
+      marker.bindPopup(`
+        <div class="popup-title">${row.Raison_sociale}</div>
+        <div class="popup-content">
+          <strong>Adresse:</strong> ${row.Adresse_lieu_infraction}<br><br>
+
+          <strong>Infraction:</strong><br>
+          ${row.Description_infraction}<br><br>
+
+          <strong>Date:</strong> ${row.Date_infraction}<br>
+          <strong>Amende:</strong> ${row.Amende}<br><br>
+
+          <a href="https://www.google.com/search?q=${googleQuery}" target="_blank">
+            🔍 Voir établissement
+          </a>
+        </div>
+      `);
+
+      markers.addLayer(marker);
+    }
+  });
+}
+
+/* SEARCH */
+document.getElementById("search").addEventListener("input", e=>{
+  const v = e.target.value.toLowerCase();
+
+  const filtered = allData.filter(r =>
+    (r.Raison_sociale || "").toLowerCase().includes(v) ||
+    (r.Adresse_lieu_infraction || "").toLowerCase().includes(v)
+  );
+
+  displayData(filtered);
+});
+
+/* FILTER */
+document.getElementById("filter").addEventListener("change", e=>{
+  const v = e.target.value;
+
+  if(!v) return displayData(allData);
+
+  displayData(allData.filter(r =>
+    (r.Description_infraction || "").includes(v)
+  ));
+});
+
+/* LOAD CSV */
+Papa.parse("listecondamnation_geocoded.csv", {
+  download:true,
+  header:true,
+  complete: function(results){
+
+    allData = results.data;
+
+// 🔥 compter les infractions
+const counts = {};
+
+allData.forEach(r=>{
+  if(!r.Description_infraction) return;
+
+  const key = r.Description_infraction.substring(0,40);
+
+  if(!counts[key]) counts[key] = 0;
+  counts[key]++;
+});
+
+    const sorted = Object.entries(counts)
+    .sort((a,b) => b[1] - a[1]);
+
+    const select = document.getElementById("filter");
+
+    sorted.forEach(([type, count])=>{
+    const opt = document.createElement("option");
+    opt.value = type;
+    opt.textContent = `${type} (x${count})`;
+    select.appendChild(opt);
+    });
+
+    displayData(allData);
+  }
+});
+</script>
+<script>
+function updateZoom(){
+  document.getElementById("zoom-level").innerText =
+    "Zoom: " + map.getZoom();
+}
+
+map.on("zoomend", updateZoom);
+updateZoom();
+</script>
+<div id="zoom-level" style="
+  position:absolute;
+    bottom:160px;
+    right:20px;
+  z-index:1000;
+  background:white;
+  padding:6px 10px;
+  border-radius:6px;
+  font-size:13px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.3);
+">
+  Zoom: 6
+</div>
+</body>
+</html>
