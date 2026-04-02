@@ -11,7 +11,6 @@
 <style>
 body { margin:0; font-family: Arial; }
 
-/* HEADER */
 .header {
   position:absolute;
   top:0;
@@ -30,13 +29,11 @@ body { margin:0; font-family: Arial; }
   font-size:14px;
 }
 
-/* MAP */
 #map {
   height: calc(100vh - 90px);
   margin-top:50px;
 }
 
-/* POPUP */
 .popup-content {
   max-height:200px;
   overflow-y:auto;
@@ -47,7 +44,6 @@ body { margin:0; font-family: Arial; }
   font-size:15px;
 }
 
-/* FOOTER */
 .footer {
   height:40px;
   background:#f5f5f5;
@@ -63,7 +59,6 @@ body { margin:0; font-family: Arial; }
   text-decoration:none;
 }
 
-/* COMPASS */
 .nav {
   position:absolute;
   bottom:60px;
@@ -83,7 +78,6 @@ body { margin:0; font-family: Arial; }
   border-radius:50%;
   background:white;
   box-shadow:0 2px 6px rgba(0,0,0,0.3);
-  cursor:pointer;
 }
 .up { top:0; left:27px; }
 .down { bottom:0; left:27px; }
@@ -94,16 +88,19 @@ body { margin:0; font-family: Arial; }
 
 <body>
 
-<!-- HEADER -->
 <div class="header">
   <input id="search" placeholder="Rechercher restaurant..." />
-  <select id="filter">
-    <option value="">Toutes les infractions</option>
+  <select id="filter"></select>
+
+  <select id="statusFilter">
+    <option value="">Tous les établissements</option>
+    <option value="active">🟢 Toujours en activité</option>
+    <option value="closed">🔴 Fermé</option>
   </select>
+
   <button onclick="resetView()">Réinitialiser</button>
 </div>
 
-<!-- COMPASS -->
 <div class="nav">
   <div class="compass">
     <button class="up" onclick="map.panBy([0,-150])">↑</button>
@@ -115,7 +112,6 @@ body { margin:0; font-family: Arial; }
 
 <div id="map"></div>
 
-<!-- FOOTER -->
 <div class="footer">
   Réalisé par <strong>&nbsp;Mathias Salvas</strong>, 1er avril 2026 —
   <a href="https://www.donneesquebec.ca/recherche/dataset/condamnations-des-etablissements-alimentaires-et-condamnations-concernant-le-bien-etre-des-anim/resource/40105615-3abf-414b-bcba-182e8f2c5eb2" target="_blank">
@@ -133,21 +129,49 @@ const map = L.map("map").setView([52, -71], 6);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
 const markers = L.markerClusterGroup({
-  disableClusteringAtZoom: 14,   // 🔥 clé principale
-  maxClusterRadius: 40,          // moins agressif
-  spiderfyOnMaxZoom: true,
-  showCoverageOnHover: false
+  disableClusteringAtZoom: 14,
+  maxClusterRadius: 40
 });
 map.addLayer(markers);
 
 let allData = [];
 
-/* RESET */
-function resetView(){
-  document.getElementById("search").value = "";
-  document.getElementById("filter").value = "";
-  displayData(allData);
-  map.setView([52,-71],6);
+/* ✅ STATUT CORRIGÉ */
+function isClosed(row){
+  const info = (row.Information_etablissement || "").toLowerCase();
+  return info.includes("cessé ses opérations");
+}
+
+/* FILTER GLOBAL */
+function applyFilters(){
+  const search = document.getElementById("search").value.toLowerCase();
+  const type = document.getElementById("filter").value;
+  const status = document.getElementById("statusFilter").value;
+
+  let filtered = allData;
+
+  if(search){
+    filtered = filtered.filter(r =>
+      (r.Raison_sociale || "").toLowerCase().includes(search) ||
+      (r.Adresse_lieu_infraction || "").toLowerCase().includes(search)
+    );
+  }
+
+  if(type){
+    filtered = filtered.filter(r =>
+      (r.SOC_NOM_ARTCL_INFRC || "").includes(type)
+    );
+  }
+
+  if(status === "active"){
+    filtered = filtered.filter(r => !isClosed(r));
+  }
+
+  if(status === "closed"){
+    filtered = filtered.filter(r => isClosed(r));
+  }
+
+  displayData(filtered);
 }
 
 /* DISPLAY */
@@ -161,15 +185,25 @@ function displayData(data){
     if(!isNaN(lat) && !isNaN(lon)){
 
       const googleQuery = encodeURIComponent(
-        (row.Raison_sociale || "") + " " + (row.Adresse_lieu_infraction || "")
+        row.Raison_sociale + " " + row.Adresse_lieu_infraction
       );
+
+      const closed = isClosed(row);
+      const status = closed ? "🔴 Fermé" : "🟢 Actif";
 
       const marker = L.marker([lat,lon]);
 
       marker.bindPopup(`
         <div class="popup-title">${row.Raison_sociale}</div>
         <div class="popup-content">
-          <strong>Adresse:</strong> ${row.Adresse_lieu_infraction}<br><br>
+
+          <strong>Statut:</strong> ${status}<br><br>
+
+          <strong>Adresse:</strong><br>
+          ${row.Adresse_lieu_infraction}<br><br>
+
+          <strong>Catégorie:</strong><br>
+          ${row.SOC_NOM_ARTCL_INFRC}<br><br>
 
           <strong>Infraction:</strong><br>
           ${row.Description_infraction}<br><br>
@@ -188,28 +222,19 @@ function displayData(data){
   });
 }
 
-/* SEARCH */
-document.getElementById("search").addEventListener("input", e=>{
-  const v = e.target.value.toLowerCase();
+/* EVENTS */
+document.getElementById("search").addEventListener("input", applyFilters);
+document.getElementById("filter").addEventListener("change", applyFilters);
+document.getElementById("statusFilter").addEventListener("change", applyFilters);
 
-  const filtered = allData.filter(r =>
-    (r.Raison_sociale || "").toLowerCase().includes(v) ||
-    (r.Adresse_lieu_infraction || "").toLowerCase().includes(v)
-  );
-
-  displayData(filtered);
-});
-
-/* FILTER */
-document.getElementById("filter").addEventListener("change", e=>{
-  const v = e.target.value;
-
-  if(!v) return displayData(allData);
-
-  displayData(allData.filter(r =>
-    (r.Description_infraction || "").includes(v)
-  ));
-});
+/* RESET */
+function resetView(){
+  document.getElementById("search").value = "";
+  document.getElementById("filter").value = "";
+  document.getElementById("statusFilter").value = "";
+  displayData(allData);
+  map.setView([52,-71],6);
+}
 
 /* LOAD CSV */
 Papa.parse("listecondamnation_geocoded.csv", {
@@ -219,55 +244,48 @@ Papa.parse("listecondamnation_geocoded.csv", {
 
     allData = results.data;
 
-// 🔥 compter les infractions
-const counts = {};
-
-allData.forEach(r=>{
-  if(!r.Description_infraction) return;
-
-  const key = r.Description_infraction.substring(0,40);
-
-  if(!counts[key]) counts[key] = 0;
-  counts[key]++;
-});
+    const counts = {};
+    allData.forEach(r=>{
+      if(!r.SOC_NOM_ARTCL_INFRC) return;
+      const key = r.SOC_NOM_ARTCL_INFRC.trim();
+      counts[key] = (counts[key] || 0) + 1;
+    });
 
     const sorted = Object.entries(counts)
-    .sort((a,b) => b[1] - a[1]);
+      .sort((a,b)=>b[1]-a[1]);
 
     const select = document.getElementById("filter");
+    select.innerHTML = `<option value="">Toutes les infractions</option>`;
 
-    sorted.forEach(([type, count])=>{
-    const opt = document.createElement("option");
-    opt.value = type;
-    opt.textContent = `${type} (x${count})`;
-    select.appendChild(opt);
+    sorted.forEach(([type,count])=>{
+      const opt = document.createElement("option");
+      opt.value = type;
+      opt.textContent = `${type} (x${count})`;
+      select.appendChild(opt);
     });
 
     displayData(allData);
   }
 });
-</script>
-<script>
+
+/* ZOOM */
 function updateZoom(){
   document.getElementById("zoom-level").innerText =
     "Zoom: " + map.getZoom();
 }
-
 map.on("zoomend", updateZoom);
-updateZoom();
 </script>
+
 <div id="zoom-level" style="
   position:absolute;
-    bottom:160px;
-    right:20px;
-  z-index:1000;
+  bottom:160px;
+  right:20px;
   background:white;
   padding:6px 10px;
   border-radius:6px;
   font-size:13px;
-  box-shadow:0 2px 6px rgba(0,0,0,0.3);
 ">
-  Zoom: 6
 </div>
+
 </body>
 </html>
